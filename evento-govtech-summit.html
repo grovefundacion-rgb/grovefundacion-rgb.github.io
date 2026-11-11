@@ -301,24 +301,41 @@ document.querySelectorAll('form[data-gform]').forEach(function (form) {
         return;
       }
     }
-    var data = new URLSearchParams();
+    var btn = form.querySelector('.btn');
+    var label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Enviando…';
+
+    // Envío con un formulario oculto hacia un iframe: es el método más confiable para Google Forms
+    // (funciona en todos los navegadores, también en iPhone y abriendo el archivo localmente).
+    var frameName = 'gf_' + Date.now();
+    var frame = document.createElement('iframe');
+    frame.name = frameName; frame.style.display = 'none';
+    var post = document.createElement('form');
+    post.method = 'POST'; post.target = frameName; post.style.display = 'none';
+    post.action = 'https://docs.google.com/forms/d/e/' + form.getAttribute('data-gform') + '/formResponse';
     form.querySelectorAll('input,textarea').forEach(function (el) {
       if (!el.name || el.name.indexOf('entry.') !== 0) return;
       if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) return;
-      data.append(el.name, el.value.trim());
+      var h = document.createElement('input');
+      h.type = 'hidden'; h.name = el.name; h.value = el.value.trim();
+      post.appendChild(h);
     });
-    var btn = form.querySelector('.btn');
-    btn.disabled = true; btn.textContent = 'Enviando…';
-    fetch('https://docs.google.com/forms/d/e/' + form.getAttribute('data-gform') + '/formResponse',
-          { method: 'POST', mode: 'no-cors', body: data })
-      .then(function () {
-        form.innerHTML = '<div class="ok"><div class="big">' + form.getAttribute('data-ok-title') + '</div><p>' +
-          form.getAttribute('data-ok-text') + '</p></div>';
-      })
-      .catch(function () {
-        btn.disabled = false; btn.textContent = 'Enviar';
-        err.textContent = 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.';
-      });
+    var done = false;
+    function ok() {
+      if (done) return; done = true;
+      form.innerHTML = '<div class="ok"><div class="big">' + form.getAttribute('data-ok-title') + '</div><p>' +
+        form.getAttribute('data-ok-text') + '</p></div>';
+      setTimeout(function () { frame.remove(); post.remove(); }, 3000);
+    }
+    frame.addEventListener('load', ok);
+    document.body.appendChild(frame);
+    document.body.appendChild(post);
+    post.submit();
+    setTimeout(function () {
+      if (done) return;
+      btn.disabled = false; btn.textContent = label;
+      err.textContent = 'No se pudo confirmar el envío. Revisa tu conexión e inténtalo de nuevo.';
+    }, 15000);
   });
 });
 
